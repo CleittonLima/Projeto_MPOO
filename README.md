@@ -2,7 +2,9 @@
 
 ### Projeto desenvolvido em grupo
 Erisvaldo Cleiton de Almeida Lima
+
 Igor Enrique Pereira de Lima
+
 Elielson Vincente de Souza
 
 # Sistema de Registro de Hotel
