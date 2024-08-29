@@ -1,4 +1,10 @@
 # Projeto MPOO
+
+### Projeto desenvolvido em grupo
+Erisvaldo Cleiton de Almeida Lima
+Igor Enrique Pereira de Lima
+Elielson Vincente de Souza
+
 # Sistema de Registro de Hotel
 
 Este projeto implementa um sistema básico de gestão de hotel utilizando FastAPI, uma estrutura web moderna e de alta performance para a criação de APIs em Python. O sistema permite a gestão de quartos, clientes, reservas, itens e compras em um hotel, utilizando arquivos JSON para armazenamento de dados.
