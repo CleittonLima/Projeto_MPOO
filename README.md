@@ -1,5 +1,8 @@
 # Projeto MPOO
 
+OBS: não é necessário adicionar o ID, pois ele gera automaticamente, se colocar um ID ele sempre será por ordem.
+Primeiro criado: ID = 1
+
 ### Projeto desenvolvido em grupo
 Erisvaldo Cleiton de Almeida Lima
 
