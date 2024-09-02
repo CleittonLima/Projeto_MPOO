@@ -19,6 +19,7 @@ class Cliente(BaseModel):
     cpf: int
 
 class Reserva(BaseModel):
+    id: int
     cliente_id: int
     quarto_id: int
 
