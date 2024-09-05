@@ -97,6 +97,23 @@ async def fazer_reserva(reserva: Reserva):
     salvar_dados(RESERVAS_FILE, reservas)
     return reserva
 
+@app.delete("/clientes/{cliente_id}", response_model=Cliente)
+async def remover_cliente(cliente_id: int):
+    for i, c in enumerate(clientes):
+        if c.id == cliente_id:
+            cliente = clientes.pop(i)
+            salvar_dados(CLIENTES_FILE, clientes)
+            return cliente
+    raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+@app.put("/clientes/{cliente_id}", response_model=Cliente)
+async def editar_cliente(cliente_id: int, cliente_atualizado: Cliente):
+    for i, c in enumerate(clientes):
+        if c.id == cliente_id:
+            clientes[i] = cliente_atualizado
+            salvar_dados(CLIENTES_FILE, clientes)
+            return cliente_atualizado
+    raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
 @app.delete("/reservas/{reserva_id}", response_model=Reserva)
 async def cancelar_reserva(reserva_id: int):
@@ -105,6 +122,19 @@ async def cancelar_reserva(reserva_id: int):
             reserva = reservas.pop(i)
             salvar_dados(RESERVAS_FILE, reservas)
             return reserva
+    raise HTTPException(status_code=404, detail="Reserva não encontrada")
+
+@app.put("/reservas/{reserva_id}", response_model=Reserva)
+async def editar_reserva(reserva_id: int, reserva_atualizada: Reserva):
+    for i, r in enumerate(reservas):
+        if r.id == reserva_id:
+            if not any(c.id == reserva_atualizada.cliente_id for c in clientes):
+                raise HTTPException(status_code=404, detail="Cliente não encontrado")
+            if not any(q.id == reserva_atualizada.quarto_id for q in quartos):
+                raise HTTPException(status_code=404, detail="Quarto não encontrado")
+            reservas[i] = reserva_atualizada
+            salvar_dados(RESERVAS_FILE, reservas)
+            return reserva_atualizada
     raise HTTPException(status_code=404, detail="Reserva não encontrada")
 
 @app.delete("/quartos/{quarto_id}", response_model=Quarto)
@@ -133,6 +163,24 @@ async def adicionar_item(item: Item):
     next_item_id += 1
     salvar_dados(ITENS_FILE, itens)
     return item
+
+@app.delete("/itens/{item_id}", response_model=Item)
+async def remover_item(item_id: int):
+    for i, item in enumerate(itens):
+        if item.id == item_id:
+            item_removido = itens.pop(i)
+            salvar_dados(ITENS_FILE, itens)
+            return item_removido
+    raise HTTPException(status_code=404, detail="Item não encontrado")
+
+@app.put("/itens/{item_id}", response_model=Item)
+async def editar_item(item_id: int, item_atualizado: Item):
+    for i, item in enumerate(itens):
+        if item.id == item_id:
+            itens[i] = item_atualizado
+            salvar_dados(ITENS_FILE, itens)
+            return item_atualizado
+    raise HTTPException(status_code=404, detail="Item não encontrado")
 
 @app.post("/compras/", response_model=Compra)
 async def comprar_item(compra: Compra):
