@@ -1,202 +1,147 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List
-import json
-import os
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship, Session
 
-app = FastAPI()
+DATABASE_URL = "sqlite:///./hotel.db"
 
-# Modelos de dados
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class QuartoDB(Base):
+    __tablename__ = "quartos"
+    id = Column(Integer, primary_key=True, index=True)
+    numero = Column(String, index=True)
+    tipo = Column(String)
+    preco = Column(Float)
+
+class ClienteDB(Base):
+    __tablename__ = "clientes"
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String)
+    cpf = Column(Integer, unique=True, index=True)
+
+class ReservaDB(Base):
+    __tablename__ = "reservas"
+    id = Column(Integer, primary_key=True, index=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"))
+    quarto_id = Column(Integer, ForeignKey("quartos.id"))
+
+class ItemDB(Base):
+    __tablename__ = "itens"
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String)
+    preco = Column(Float)
+
+class CompraDB(Base):
+    __tablename__ = "compras"
+    id = Column(Integer, primary_key=True, index=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"))
+    item_id = Column(Integer, ForeignKey("itens.id"))
+
+Base.metadata.create_all(bind=engine)
+
 class Quarto(BaseModel):
     id: int
     numero: str
     tipo: str
     preco: float
 
+    class Config:
+        orm_mode = True
+
 class Cliente(BaseModel):
     id: int
     nome: str
     cpf: int
+
+    class Config:
+        orm_mode = True
 
 class Reserva(BaseModel):
     id: int
     cliente_id: int
     quarto_id: int
 
+    class Config:
+        orm_mode = True
+
 class Item(BaseModel):
     id: int
     nome: str
     preco: float
+
+    class Config:
+        orm_mode = True
 
 class Compra(BaseModel):
     id: int
     cliente_id: int
     item_id: int
 
-# Caminhos dos arquivos JSON
-QUARTOS_FILE = "quartos.json"
-CLIENTES_FILE = "clientes.json"
-RESERVAS_FILE = "reservas.json"
-ITENS_FILE = "itens.json"
-COMPRAS_FILE = "compras.json"
+    class Config:
+        orm_mode = True
 
-# Funções para carregar e salvar dados
-def carregar_dados(caminho: str, modelo):
-    if os.path.exists(caminho):
-        with open(caminho, "r") as f:
-            dados = json.load(f)
-            return [modelo(**item) for item in dados]
-    return []
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-def salvar_dados(caminho: str, dados):
-    with open(caminho, "w") as f:
-        json.dump([d.dict() for d in dados], f, indent=4)
-
-# Carregar dados ao iniciar
-quartos: List[Quarto] = carregar_dados(QUARTOS_FILE, Quarto)
-clientes: List[Cliente] = carregar_dados(CLIENTES_FILE, Cliente)
-reservas: List[Reserva] = carregar_dados(RESERVAS_FILE, Reserva)
-itens: List[Item] = carregar_dados(ITENS_FILE, Item)
-compras: List[Compra] = carregar_dados(COMPRAS_FILE, Compra)
-
-# Inicializar IDs
-next_quarto_id = max([q.id for q in quartos], default=0) + 1
-next_cliente_id = max([c.id for c in clientes], default=0) + 1
-next_reserva_id = max([r.id for r in reservas], default=0) + 1
-next_item_id = max([i.id for i in itens], default=0) + 1
-next_compra_id = max([c.id for c in compras], default=0) + 1
+app = FastAPI()
 
 # Endpoints
 @app.post("/quartos/", response_model=Quarto)
-async def adicionar_quarto(quarto: Quarto):
-    global next_quarto_id
-    quarto.id = next_quarto_id
-    quartos.append(quarto)
-    next_quarto_id += 1
-    salvar_dados(QUARTOS_FILE, quartos)
-    return quarto
+async def adicionar_quarto(quarto: Quarto, db: Session = Depends(get_db)):
+    db_quarto = QuartoDB(numero=quarto.numero, tipo=quarto.tipo, preco=quarto.preco)
+    db.add(db_quarto)
+    db.commit()
+    db.refresh(db_quarto)
+    return db_quarto
 
 @app.post("/clientes/", response_model=Cliente)
-async def registrar_cliente(cliente: Cliente):
-    global next_cliente_id
-    cliente.id = next_cliente_id
-    clientes.append(cliente)
-    next_cliente_id += 1
-    salvar_dados(CLIENTES_FILE, clientes)
-    return cliente
-
+async def registrar_cliente(cliente: Cliente, db: Session = Depends(get_db)):
+    db_cliente = ClienteDB(nome=cliente.nome, cpf=cliente.cpf)
+    db.add(db_cliente)
+    db.commit()
+    db.refresh(db_cliente)
+    return db_cliente
 
 @app.post("/reservas/", response_model=Reserva)
-async def fazer_reserva(reserva: Reserva):
-    if not any(c.id == reserva.cliente_id for c in clientes):
-        raise HTTPException(status_code=404, detail="Cliente não encontrado")
-    if not any(q.id == reserva.quarto_id for q in quartos):
-        raise HTTPException(status_code=404, detail="Quarto não encontrado")
-
-    reservas.append(reserva)
-    salvar_dados(RESERVAS_FILE, reservas)
-    return reserva
-
-@app.delete("/clientes/{cliente_id}", response_model=Cliente)
-async def remover_cliente(cliente_id: int):
-    for i, c in enumerate(clientes):
-        if c.id == cliente_id:
-            cliente = clientes.pop(i)
-            salvar_dados(CLIENTES_FILE, clientes)
-            return cliente
-    raise HTTPException(status_code=404, detail="Cliente não encontrado")
-
-@app.put("/clientes/{cliente_id}", response_model=Cliente)
-async def editar_cliente(cliente_id: int, cliente_atualizado: Cliente):
-    for i, c in enumerate(clientes):
-        if c.id == cliente_id:
-            clientes[i] = cliente_atualizado
-            salvar_dados(CLIENTES_FILE, clientes)
-            return cliente_atualizado
-    raise HTTPException(status_code=404, detail="Cliente não encontrado")
-
-@app.delete("/reservas/{reserva_id}", response_model=Reserva)
-async def cancelar_reserva(reserva_id: int):
-    for i, r in enumerate(reservas):
-        if r.id == reserva_id:
-            reserva = reservas.pop(i)
-            salvar_dados(RESERVAS_FILE, reservas)
-            return reserva
-    raise HTTPException(status_code=404, detail="Reserva não encontrada")
-
-@app.put("/reservas/{reserva_id}", response_model=Reserva)
-async def editar_reserva(reserva_id: int, reserva_atualizada: Reserva):
-    for i, r in enumerate(reservas):
-        if r.id == reserva_id:
-            if not any(c.id == reserva_atualizada.cliente_id for c in clientes):
-                raise HTTPException(status_code=404, detail="Cliente não encontrado")
-            if not any(q.id == reserva_atualizada.quarto_id for q in quartos):
-                raise HTTPException(status_code=404, detail="Quarto não encontrado")
-            reservas[i] = reserva_atualizada
-            salvar_dados(RESERVAS_FILE, reservas)
-            return reserva_atualizada
-    raise HTTPException(status_code=404, detail="Reserva não encontrada")
-
-@app.delete("/quartos/{quarto_id}", response_model=Quarto)
-async def remover_quarto(quarto_id: int):
-    for i, q in enumerate(quartos):
-        if q.id == quarto_id:
-            quarto = quartos.pop(i)
-            salvar_dados(QUARTOS_FILE, quartos)
-            return quarto
-    raise HTTPException(status_code=404, detail="Quarto não encontrado")
-
-@app.put("/quartos/{quarto_id}", response_model=Quarto)
-async def editar_quarto(quarto_id: int, quarto: Quarto):
-    for i, q in enumerate(quartos):
-        if q.id == quarto_id:
-            quartos[i] = quarto
-            salvar_dados(QUARTOS_FILE, quartos)
-            return quarto
-    raise HTTPException(status_code=404, detail="Quarto não encontrado")
+async def fazer_reserva(reserva: Reserva, db: Session = Depends(get_db)):
+    db_reserva = ReservaDB(cliente_id=reserva.cliente_id, quarto_id=reserva.quarto_id)
+    db.add(db_reserva)
+    db.commit()
+    db.refresh(db_reserva)
+    return db_reserva
 
 @app.post("/itens/", response_model=Item)
-async def adicionar_item(item: Item):
-    global next_item_id
-    item.id = next_item_id
-    itens.append(item)
-    next_item_id += 1
-    salvar_dados(ITENS_FILE, itens)
-    return item
-
-@app.delete("/itens/{item_id}", response_model=Item)
-async def remover_item(item_id: int):
-    for i, item in enumerate(itens):
-        if item.id == item_id:
-            item_removido = itens.pop(i)
-            salvar_dados(ITENS_FILE, itens)
-            return item_removido
-    raise HTTPException(status_code=404, detail="Item não encontrado")
-
-@app.put("/itens/{item_id}", response_model=Item)
-async def editar_item(item_id: int, item_atualizado: Item):
-    for i, item in enumerate(itens):
-        if item.id == item_id:
-            itens[i] = item_atualizado
-            salvar_dados(ITENS_FILE, itens)
-            return item_atualizado
-    raise HTTPException(status_code=404, detail="Item não encontrado")
+async def adicionar_item(item: Item, db: Session = Depends(get_db)):
+    db_item = ItemDB(nome=item.nome, preco=item.preco)
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
 
 @app.post("/compras/", response_model=Compra)
-async def comprar_item(compra: Compra):
-    global next_compra_id
-    if not any(c.id == compra.cliente_id for c in clientes):
-        raise HTTPException(status_code=404, detail="Cliente não encontrado")
-    if not any(i.id == compra.item_id for i in itens):
-        raise HTTPException(status_code=404, detail="Item não encontrado")
-    compra.id = next_compra_id
-    compras.append(compra)
-    next_compra_id += 1
-    salvar_dados(COMPRAS_FILE, compras)
-    return compra
+async def comprar_item(compra: Compra, db: Session = Depends(get_db)):
+    db_compra = CompraDB(cliente_id=compra.cliente_id, item_id=compra.item_id)
+    db.add(db_compra)
+    db.commit()
+    db.refresh(db_compra)
+    return db_compra
 
 @app.get("/dados_hotel/")
-async def exibir_dados_hotel():
+async def exibir_dados_hotel(db: Session = Depends(get_db)):
+    quartos = db.query(QuartoDB).all()
+    clientes = db.query(ClienteDB).all()
+    reservas = db.query(ReservaDB).all()
+    itens = db.query(ItemDB).all()
+    compras = db.query(CompraDB).all()
     return {
         "quartos": quartos,
         "clientes": clientes,
