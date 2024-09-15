@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List
 from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship, Session
+from sqlalchemy.orm import sessionmaker, Session, relationship
 
 DATABASE_URL = "sqlite:///./hotel.db"
 
@@ -44,6 +44,7 @@ class CompraDB(Base):
 
 Base.metadata.create_all(bind=engine)
 
+# Classes
 class Quarto(BaseModel):
     id: int
     numero: str
@@ -103,7 +104,26 @@ async def adicionar_quarto(quarto: Quarto, db: Session = Depends(get_db)):
     db.refresh(db_quarto)
     return db_quarto
 
-#CRIAR PARA EDITAR E EXCLUIR QUARTO
+@app.put("/quartos/{quarto_id}", response_model=Quarto)
+async def editar_quarto(quarto_id: int, quarto_atualizado: Quarto, db: Session = Depends(get_db)):
+    quarto = db.query(QuartoDB).filter(QuartoDB.id == quarto_id).first()
+    if not quarto:
+        raise HTTPException(status_code=404, detail="Quarto não encontrado")
+    quarto.numero = quarto_atualizado.numero
+    quarto.tipo = quarto_atualizado.tipo
+    quarto.preco = quarto_atualizado.preco
+    db.commit()
+    db.refresh(quarto)
+    return quarto
+
+@app.delete("/quartos/{quarto_id}", response_model=Quarto)
+async def remover_quarto(quarto_id: int, db: Session = Depends(get_db)):
+    quarto = db.query(QuartoDB).filter(QuartoDB.id == quarto_id).first()
+    if not quarto:
+        raise HTTPException(status_code=404, detail="Quarto não encontrado")
+    db.delete(quarto)
+    db.commit()
+    return quarto
 
 @app.post("/clientes/", response_model=Cliente)
 async def registrar_cliente(cliente: Cliente, db: Session = Depends(get_db)):
@@ -113,7 +133,25 @@ async def registrar_cliente(cliente: Cliente, db: Session = Depends(get_db)):
     db.refresh(db_cliente)
     return db_cliente
 
-#CRIAR PARA EDITAR E EXCLUIR CLIENTE
+@app.put("/clientes/{cliente_id}", response_model=Cliente)
+async def editar_cliente(cliente_id: int, cliente_atualizado: Cliente, db: Session = Depends(get_db)):
+    cliente = db.query(ClienteDB).filter(ClienteDB.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    cliente.nome = cliente_atualizado.nome
+    cliente.cpf = cliente_atualizado.cpf
+    db.commit()
+    db.refresh(cliente)
+    return cliente
+
+@app.delete("/clientes/{cliente_id}", response_model=Cliente)
+async def remover_cliente(cliente_id: int, db: Session = Depends(get_db)):
+    cliente = db.query(ClienteDB).filter(ClienteDB.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    db.delete(cliente)
+    db.commit()
+    return cliente
 
 @app.post("/reservas/", response_model=Reserva)
 async def fazer_reserva(reserva: Reserva, db: Session = Depends(get_db)):
@@ -123,7 +161,25 @@ async def fazer_reserva(reserva: Reserva, db: Session = Depends(get_db)):
     db.refresh(db_reserva)
     return db_reserva
 
-#CRIAR PARA EDITAR E EXCLUIR RESERVA
+@app.put("/reservas/{reserva_id}", response_model=Reserva)
+async def editar_reserva(reserva_id: int, reserva_atualizada: Reserva, db: Session = Depends(get_db)):
+    reserva = db.query(ReservaDB).filter(ReservaDB.id == reserva_id).first()
+    if not reserva:
+        raise HTTPException(status_code=404, detail="Reserva não encontrada")
+    reserva.cliente_id = reserva_atualizada.cliente_id
+    reserva.quarto_id = reserva_atualizada.quarto_id
+    db.commit()
+    db.refresh(reserva)
+    return reserva
+
+@app.delete("/reservas/{reserva_id}", response_model=Reserva)
+async def cancelar_reserva(reserva_id: int, db: Session = Depends(get_db)):
+    reserva = db.query(ReservaDB).filter(ReservaDB.id == reserva_id).first()
+    if not reserva:
+        raise HTTPException(status_code=404, detail="Reserva não encontrada")
+    db.delete(reserva)
+    db.commit()
+    return reserva
 
 @app.post("/itens/", response_model=Item)
 async def adicionar_item(item: Item, db: Session = Depends(get_db)):
@@ -133,7 +189,25 @@ async def adicionar_item(item: Item, db: Session = Depends(get_db)):
     db.refresh(db_item)
     return db_item
 
-#CRIAR PARA EDITAR E EXCLUIR ITEM
+@app.put("/itens/{item_id}", response_model=Item)
+async def editar_item(item_id: int, item_atualizado: Item, db: Session = Depends(get_db)):
+    item = db.query(ItemDB).filter(ItemDB.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    item.nome = item_atualizado.nome
+    item.preco = item_atualizado.preco
+    db.commit()
+    db.refresh(item)
+    return item
+
+@app.delete("/itens/{item_id}", response_model=Item)
+async def remover_item(item_id: int, db: Session = Depends(get_db)):
+    item = db.query(ItemDB).filter(ItemDB.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    db.delete(item)
+    db.commit()
+    return item
 
 @app.post("/compras/", response_model=Compra)
 async def comprar_item(compra: Compra, db: Session = Depends(get_db)):
@@ -142,8 +216,6 @@ async def comprar_item(compra: Compra, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_compra)
     return db_compra
-
-#CRIAR PARA EDITAR E EXCLUIR COMPRA
 
 @app.get("/dados_hotel/")
 async def exibir_dados_hotel(db: Session = Depends(get_db)):
