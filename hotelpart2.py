@@ -1,15 +1,19 @@
 from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
-from typing import List
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
+from pydantic import BaseModel, Field, validator
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
+from datetime import datetime
 
 DATABASE_URL = "sqlite:///./hotel.db"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+class BaseModelDB(Base):
+    __abstract__ = True
+    id = Column(Integer, primary_key=True, index=True)
 
 class QuartoDB(Base):
     __tablename__ = "quartos"
@@ -18,38 +22,34 @@ class QuartoDB(Base):
     tipo = Column(String)
     preco = Column(Float)
 
-class ClienteDB(Base):
+class ClienteDB(BaseModelDB):
     __tablename__ = "clientes"
-    id = Column(Integer, primary_key=True, index=True)
     nome = Column(String)
     cpf = Column(Integer, unique=True, index=True)
 
-class ReservaDB(Base):
+class ReservaDB(BaseModelDB):
     __tablename__ = "reservas"
-    id = Column(Integer, primary_key=True, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id"))
     quarto_id = Column(Integer, ForeignKey("quartos.id"))
+    dias = Column(Integer)
 
-class ItemDB(Base):
+class ItemDB(BaseModelDB):
     __tablename__ = "itens"
-    id = Column(Integer, primary_key=True, index=True)
     nome = Column(String)
     preco = Column(Float)
 
-class CompraDB(Base):
+class CompraDB(BaseModelDB):
     __tablename__ = "compras"
-    id = Column(Integer, primary_key=True, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id"))
     item_id = Column(Integer, ForeignKey("itens.id"))
 
 Base.metadata.create_all(bind=engine)
 
-# Classes
 class Quarto(BaseModel):
     id: int
     numero: str
     tipo: str
-    preco: float
+    preco: float = Field(gt=0, description="Preço deve ser maior que 0")
 
     class Config:
         orm_mode = True
@@ -57,7 +57,13 @@ class Quarto(BaseModel):
 class Cliente(BaseModel):
     id: int
     nome: str
-    cpf: int
+    cpf: int = Field(..., title="CPF", description="Deve ter 11 dígitos")
+
+    @validator('cpf')
+    def validar_cpf(cls, v):
+        if len(str(v)) != 11:
+            raise ValueError('CPF deve ter exatamente 11 dígitos')
+        return v
 
     class Config:
         orm_mode = True
@@ -66,6 +72,7 @@ class Reserva(BaseModel):
     id: int
     cliente_id: int
     quarto_id: int
+    dias: int = Field(gt=0, description="Número de dias de hospedagem deve ser maior que 0")
 
     class Config:
         orm_mode = True
@@ -155,11 +162,64 @@ async def remover_cliente(cliente_id: int, db: Session = Depends(get_db)):
 
 @app.post("/reservas/", response_model=Reserva)
 async def fazer_reserva(reserva: Reserva, db: Session = Depends(get_db)):
-    db_reserva = ReservaDB(cliente_id=reserva.cliente_id, quarto_id=reserva.quarto_id)
+    db_reserva = ReservaDB(cliente_id=reserva.cliente_id, quarto_id=reserva.quarto_id, dias=reserva.dias)
     db.add(db_reserva)
     db.commit()
     db.refresh(db_reserva)
     return db_reserva
+
+@app.get("/total_pagar/{cliente_id}", response_model=dict)
+async def calcular_nota_fiscal(cliente_id: int, db: Session = Depends(get_db)):
+    # Verificar reservas do cliente
+    reservas = db.query(ReservaDB).filter(ReservaDB.cliente_id == cliente_id).all()
+    if not reservas:
+        raise HTTPException(status_code=404, detail="Nenhuma reserva encontrada para o cliente")
+
+    total_reservas = 0
+    reservas_detalhadas = []  # Lista para armazenar detalhes das reservas
+
+    for reserva in reservas:
+        quarto = db.query(QuartoDB).filter(QuartoDB.id == reserva.quarto_id).first()
+        if quarto:
+            preco_total = quarto.preco * reserva.dias
+            total_reservas += preco_total
+            reservas_detalhadas.append({
+                "quarto": quarto.tipo,
+                "dias": reserva.dias,
+                "preco_diaria": quarto.preco,
+                "preco_total": preco_total
+            })
+
+    # Verificar compras do cliente
+    compras = db.query(CompraDB).filter(CompraDB.cliente_id == cliente_id).all()
+    total_compras = 0
+    itens_comprados = []
+
+    for compra in compras:
+        item = db.query(ItemDB).filter(ItemDB.id == compra.item_id).first()
+        if item:
+            total_compras += item.preco
+            itens_comprados.append({
+                "nome": item.nome,
+                "preco": item.preco
+            })
+
+    # Total final a pagar
+    total_a_pagar = total_reservas + total_compras
+    cliente = db.query(ClienteDB).filter(ClienteDB.id == cliente_id).first()
+
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    return {
+        "nome_cliente": cliente.nome,
+        "reservas": reservas_detalhadas,
+        "itens_comprados": itens_comprados,
+        "total_reservas": total_reservas,
+        "total_compras": total_compras,
+        "total_a_pagar": total_a_pagar
+    }
+
 
 @app.put("/reservas/{reserva_id}", response_model=Reserva)
 async def editar_reserva(reserva_id: int, reserva_atualizada: Reserva, db: Session = Depends(get_db)):
@@ -168,6 +228,7 @@ async def editar_reserva(reserva_id: int, reserva_atualizada: Reserva, db: Sessi
         raise HTTPException(status_code=404, detail="Reserva não encontrada")
     reserva.cliente_id = reserva_atualizada.cliente_id
     reserva.quarto_id = reserva_atualizada.quarto_id
+    reserva.dias = reserva_atualizada.dias
     db.commit()
     db.refresh(reserva)
     return reserva
@@ -224,10 +285,34 @@ async def exibir_dados_hotel(db: Session = Depends(get_db)):
     reservas = db.query(ReservaDB).all()
     itens = db.query(ItemDB).all()
     compras = db.query(CompraDB).all()
-    return {
+
+    dados_hotel = {
         "quartos": quartos,
         "clientes": clientes,
         "reservas": reservas,
         "itens": itens,
         "compras": compras
     }
+
+    # Adiciona o total a pagar para cada cliente
+    for cliente in clientes:
+        reservas_cliente = db.query(ReservaDB).filter(ReservaDB.cliente_id == cliente.id).all()
+        compras_cliente = db.query(CompraDB).filter(CompraDB.cliente_id == cliente.id).all()
+
+        total_reservas = 0
+        for reserva in reservas_cliente:
+            quarto = db.query(QuartoDB).filter(QuartoDB.id == reserva.quarto_id).first()
+            if quarto:
+                total_reservas += quarto.preco * reserva.dias
+
+        total_compras = 0
+        for compra in compras_cliente:
+            item = db.query(ItemDB).filter(ItemDB.id == compra.item_id).first()
+            if item:
+                total_compras += item.preco
+
+        total_a_pagar = total_reservas + total_compras
+
+        cliente.total_a_pagar = total_a_pagar
+
+    return dados_hotel
