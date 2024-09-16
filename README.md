@@ -43,7 +43,7 @@ Executar o Servidor: Inicie o servidor FastAPI usando Uvicorn:
 Copiar código e execulte no terminal
 
     ```bash
-    uvicorn main:app --reload
+    uvicorn hotelpart1:app --reload
     ```
 
 O servidor será iniciado e poderá ser acessado em [http://127.0.0.1:8000](http://127.0.0.1:8000).

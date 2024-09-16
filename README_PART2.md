@@ -48,7 +48,7 @@ Este projeto implementa um sistema básico de gestão de hotel utilizando FastAP
 3. Execute o servidor FastAPI utilizando o Uvicorn:
 
     ```bash
-    uvicorn main:app --reload
+    uvicorn hotelpart2:app --reload
     ```
 
 4. O servidor será iniciado e poderá ser acessado em [http://127.0.0.1:8000](http://127.0.0.1:8000).
