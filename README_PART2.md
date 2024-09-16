@@ -16,66 +16,62 @@ Elielson Vincente de Souza
 Este projeto implementa um sistema básico de gestão de hotel utilizando FastAPI, uma estrutura web moderna e de alta performance para a criação de APIs em Python. O sistema permite a gestão de quartos, clientes, reservas, itens e compras em um hotel, utilizando o banco de dados SQLite para armazenar os dados.
 
 ## Funcionalidades
-● Gestão de Quartos: Adicionar, editar, remover e listar quartos disponíveis no hotel.
+- **Gestão de Quartos**: Adicionar, editar, remover e listar quartos disponíveis no hotel.
 
-● Gestão de Clientes: Registrar novos clientes no sistema e gerenciar informações de clientes existentes.
+- **Gestão de Clientes**: Registrar novos clientes no sistema e gerenciar informações de clientes existentes.
 
-● Gestão de Reservas: Realizar e cancelar reservas de quartos, garantindo a verificação da existência do cliente e do quarto antes da confirmação.
+- **Gestão de Reservas**: Realizar e cancelar reservas de quartos, garantindo a verificação da existência do cliente e do quarto antes da confirmação.
 
-● Gestão de Itens: Adicionar itens que podem ser comprados pelos clientes durante a estadia.
+- **Gestão de Itens**: Adicionar itens que podem ser comprados pelos clientes durante a estadia.
 
-● Gestão de Compras: Registrar compras de itens feitas pelos clientes, associando-as ao cliente correspondente.
+- **Gestão de Compras**: Registrar compras de itens feitas pelos clientes, associando-as ao cliente correspondente.
 
-● Visualização de Dados: Endpoint para exibir todos os dados armazenados no sistema, incluindo quartos, clientes, reservas, itens e compras.
+- Cálculo Total a Pagar: Endpoint para calcular o total a pagar por um cliente, considerando tanto as reservas de quartos quanto as compras de itens realizadas durante a estadia.
+
+- **Visualização de Dados**: Endpoint para exibir todos os dados armazenados no sistema, incluindo quartos, clientes, reservas, itens e compras, com o valor total a pagar por cliente.
+
+## Novas Funcionalidades
+- **Cálculo de Total a Pagar**: Implementação do endpoint `/total_pagar/{cliente_id}`, que gera uma nota fiscal detalhada com o nome do cliente, os itens comprados, o valor das reservas, e o valor total a pagar.
+
+- **Rota `/dados_hotel/`**: Atualizada para incluir informações sobre o total a pagar de cada cliente.
 
 ## Como Usar
 
-Instale o FastAPI, Uvicorn e o Pydantic para que funcione
+1. Instale as dependências necessárias, incluindo **FastAPI**, **Uvicorn** e **Pydantic**:
 
-Copiar código para instalar
+    ```bash
+    pip install fastapi uvicorn pydantic
+    ```
 
-pip install fastapi uvicorn pydantic
+2. Crie o banco de dados local com o **SQLite**. A base de dados será automaticamente criada no primeiro uso.
 
+3. Execute o servidor FastAPI utilizando o Uvicorn:
 
-Executar o Servidor: Inicie o servidor FastAPI usando Uvicorn:
+    ```bash
+    uvicorn main:app --reload
+    ```
 
-Copiar código e execulte no terminal
-
-uvicorn main:app --reload
-
-O servidor será iniciado e poderá ser acessado em http://127.0.0.1:8000.
+4. O servidor será iniciado e poderá ser acessado em [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 ## Endpoints Principais
-POST /quartos/ - Adicionar um novo quarto
-
-PUT /quartos/{quarto_id} - Editar um quarto existente
-
-DELETE /quartos/{quarto_id} - Remover um quarto
-
-POST /clientes/ - Registrar um novo cliente
-
-POST /reservas/ - Fazer uma nova reserva
-
-DELETE /reservas/{reserva_id} - Cancelar uma reserva
-
-POST /itens/ - Adicionar um novo item disponível para compra
-
-POST /compras/ - Registrar a compra de um item por um cliente
-
-GET /dados_hotel/ - Exibir todos os dados do hotel
+- **POST** `/quartos/` - Adicionar um novo quarto
+- **PUT** `/quartos/{quarto_id}` - Editar um quarto existente
+- **DELETE** `/quartos/{quarto_id}` - Remover um quarto
+- **POST** `/clientes/` - Registrar um novo cliente
+- **POST** `/reservas/` - Fazer uma nova reserva
+- **DELETE** `/reservas/{reserva_id}` - Cancelar uma reserva
+- **POST** `/itens/` - Adicionar um novo item disponível para compra
+- **POST** `/compras/` - Registrar a compra de um item por um cliente
+- **GET** `/total_pagar/{cliente_id}` - Gerar nota fiscal detalhada com o valor total de compras e reservas de um cliente
+- **GET** `/dados_hotel/` - Exibir todos os dados do hotel, incluindo quartos, clientes, reservas, itens e compras, além do total a pagar por cliente
 
 ## Estrutura de Dados
 
-Os dados são armazenados localmente em arquivos JSON:
+Os dados são armazenados em um banco de dados **SQLite** local:
 
-● quartos.json
-
-● clientes.json
-
-● reservas.json
-
-● itens.json
-
-● compras.json
-
-Cada arquivo armazena os registros correspondentes a sua entidade, permitindo persistência de dados entre execuções do servidor.
+- Tabelas:
+  - `quartos`
+  - `clientes`
+  - `reservas`
+  - `itens`
+  - `compras`
