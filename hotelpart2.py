@@ -15,33 +15,44 @@ class BaseModelDB(Base):
     __abstract__ = True
     id = Column(Integer, primary_key=True, index=True)
 
+
 class QuartoDB(Base):
     __tablename__ = "quartos"
     id = Column(Integer, primary_key=True, index=True)
     numero = Column(String, index=True)
     tipo = Column(String)
     preco = Column(Float)
+    reservas = relationship("ReservaDB", back_populates="quarto")
 
 class ClienteDB(BaseModelDB):
     __tablename__ = "clientes"
     nome = Column(String)
     cpf = Column(Integer, unique=True, index=True)
+    reservas = relationship("ReservaDB", back_populates="cliente")
+    compras = relationship("CompraDB", back_populates="cliente")
+
 
 class ReservaDB(BaseModelDB):
     __tablename__ = "reservas"
     cliente_id = Column(Integer, ForeignKey("clientes.id"))
     quarto_id = Column(Integer, ForeignKey("quartos.id"))
     dias = Column(Integer)
+    cliente = relationship("ClienteDB", back_populates="reservas")
+    quarto = relationship("QuartoDB", back_populates="reservas")
 
 class ItemDB(BaseModelDB):
     __tablename__ = "itens"
     nome = Column(String)
     preco = Column(Float)
+    compras = relationship("CompraDB", back_populates="item")
+
 
 class CompraDB(BaseModelDB):
     __tablename__ = "compras"
     cliente_id = Column(Integer, ForeignKey("clientes.id"))
     item_id = Column(Integer, ForeignKey("itens.id"))
+    cliente = relationship("ClienteDB", back_populates="compras")
+    item = relationship("ItemDB", back_populates="compras")
 
 Base.metadata.create_all(bind=engine)
 
@@ -168,59 +179,6 @@ async def fazer_reserva(reserva: Reserva, db: Session = Depends(get_db)):
     db.refresh(db_reserva)
     return db_reserva
 
-@app.get("/total_pagar/{cliente_id}", response_model=dict)
-async def calcular_nota_fiscal(cliente_id: int, db: Session = Depends(get_db)):
-    # Verificar reservas do cliente
-    reservas = db.query(ReservaDB).filter(ReservaDB.cliente_id == cliente_id).all()
-    if not reservas:
-        raise HTTPException(status_code=404, detail="Nenhuma reserva encontrada para o cliente")
-
-    total_reservas = 0
-    reservas_detalhadas = []  # Lista para armazenar detalhes das reservas
-
-    for reserva in reservas:
-        quarto = db.query(QuartoDB).filter(QuartoDB.id == reserva.quarto_id).first()
-        if quarto:
-            preco_total = quarto.preco * reserva.dias
-            total_reservas += preco_total
-            reservas_detalhadas.append({
-                "quarto": quarto.tipo,
-                "dias": reserva.dias,
-                "preco_diaria": quarto.preco,
-                "preco_total": preco_total
-            })
-
-    # Verificar compras do cliente
-    compras = db.query(CompraDB).filter(CompraDB.cliente_id == cliente_id).all()
-    total_compras = 0
-    itens_comprados = []
-
-    for compra in compras:
-        item = db.query(ItemDB).filter(ItemDB.id == compra.item_id).first()
-        if item:
-            total_compras += item.preco
-            itens_comprados.append({
-                "nome": item.nome,
-                "preco": item.preco
-            })
-
-    # Total final a pagar
-    total_a_pagar = total_reservas + total_compras
-    cliente = db.query(ClienteDB).filter(ClienteDB.id == cliente_id).first()
-
-    if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado")
-
-    return {
-        "nome_cliente": cliente.nome,
-        "reservas": reservas_detalhadas,
-        "itens_comprados": itens_comprados,
-        "total_reservas": total_reservas,
-        "total_compras": total_compras,
-        "total_a_pagar": total_a_pagar
-    }
-
-
 @app.put("/reservas/{reserva_id}", response_model=Reserva)
 async def editar_reserva(reserva_id: int, reserva_atualizada: Reserva, db: Session = Depends(get_db)):
     reserva = db.query(ReservaDB).filter(ReservaDB.id == reserva_id).first()
@@ -278,6 +236,64 @@ async def comprar_item(compra: Compra, db: Session = Depends(get_db)):
     db.refresh(db_compra)
     return db_compra
 
+@app.get("/clientes/{cliente_id}/reservas")
+async def listar_reservas_por_cliente(cliente_id: int, db: Session = Depends(get_db)):
+    cliente = db.query(ClienteDB).filter(ClienteDB.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    reservas = db.query(ReservaDB).filter(ReservaDB.cliente_id == cliente_id).all()
+    if not reservas:
+        raise HTTPException(status_code=404, detail="Nenhuma reserva encontrada para este cliente")
+    return reservas
+
+@app.get("/total_pagar/{cliente_id}", response_model=dict)
+async def calcular_nota_fiscal(cliente_id: int, db: Session = Depends(get_db)):
+    reservas = db.query(ReservaDB).filter(ReservaDB.cliente_id == cliente_id).all()
+    if not reservas:
+        raise HTTPException(status_code=404, detail="Nenhuma reserva encontrada para o cliente")
+
+    total_reservas = 0
+    reservas_detalhadas = []
+
+    for reserva in reservas:
+        quarto = db.query(QuartoDB).filter(QuartoDB.id == reserva.quarto_id).first()
+        if quarto:
+            preco_total = quarto.preco * reserva.dias
+            total_reservas += preco_total
+            reservas_detalhadas.append({
+                "quarto": quarto.tipo,
+                "dias": reserva.dias,
+                "preco_diaria": quarto.preco,
+                "preco_total": preco_total
+            })
+
+    compras = db.query(CompraDB).filter(CompraDB.cliente_id == cliente_id).all()
+    total_compras = 0
+    itens_comprados = []
+
+    for compra in compras:
+        item = db.query(ItemDB).filter(ItemDB.id == compra.item_id).first()
+        if item:
+            total_compras += item.preco
+            itens_comprados.append({
+                "nome": item.nome,
+                "preco": item.preco
+            })
+
+    total_a_pagar = total_reservas + total_compras
+    cliente = db.query(ClienteDB).filter(ClienteDB.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    return {
+        "nome_cliente": cliente.nome,
+        "reservas": reservas_detalhadas,
+        "itens_comprados": itens_comprados,
+        "total_reservas": total_reservas,
+        "total_compras": total_compras,
+        "total_a_pagar": total_a_pagar
+    }
+
 @app.get("/dados_hotel/")
 async def exibir_dados_hotel(db: Session = Depends(get_db)):
     quartos = db.query(QuartoDB).all()
@@ -294,7 +310,6 @@ async def exibir_dados_hotel(db: Session = Depends(get_db)):
         "compras": compras
     }
 
-    # Adiciona o total a pagar para cada cliente
     for cliente in clientes:
         reservas_cliente = db.query(ReservaDB).filter(ReservaDB.cliente_id == cliente.id).all()
         compras_cliente = db.query(CompraDB).filter(CompraDB.cliente_id == cliente.id).all()
