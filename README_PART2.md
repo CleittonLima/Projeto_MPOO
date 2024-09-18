@@ -1,7 +1,6 @@
-FAZER ALTERAÇÕES PARA O NOVO CÓDIGO COM O BANCO DE DADOS
 # Projeto MPOO PARTE 2
 
-OBS: não é necessário adicionar o ID, pois ele gera automaticamente, se colocar um ID ele sempre será por ordem.
+OBS: não é necessário adicionar o ID, pois ele é gerado automaticamente, se colocar um ID ele sempre será por ordem.
 Primeiro criado: ID = 1
 
 ### Projeto desenvolvido em grupo
